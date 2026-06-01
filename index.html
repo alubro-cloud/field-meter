@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2C3742">
+<title>外勤里程計費</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f0f2f4;
+  --surface: #ffffff;
+  --surface2: #f8f9fa;
+  --border: rgba(0,0,0,0.08);
+  --accent: #B8864B;
+  --accent2: #9E7340;
+  --green: #27ae60;
+  --red: #e74c3c;
+  --text: #2C3742;
+  --muted: #999;
+  --rate: 7;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans TC', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* 背景格線 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(184,134,75,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(184,134,75,0.08) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 0 0 40px; }
+
+/* ── HEADER ── */
+.header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2C3742;
+  margin-bottom: 4px;
+}
+.brand { font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 3px; }
+.header-date { font-size: 11px; color: rgba(255,255,255,0.5); }
+
+/* ── METER DISPLAY ── */
+.meter-wrap {
+  padding: 24px 20px 0;
+  text-align: center;
+}
+.meter-label { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+
+.meter-display {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px 24px 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+}
+.meter-display::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.meter-display.running::before { opacity: 1; animation: scanline 2s linear infinite; }
+@keyframes scanline {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.fare-amount {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 72px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -2px;
+  transition: color 0.3s;
+}
+.fare-amount.running { color: var(--accent2); }
+.fare-unit { font-size: 18px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+
+.meter-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+.stat-box {
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+}
+.stat-val {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+.stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+/* 狀態指示燈 */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+.status-dot.active { background: var(--green); animation: pulse 1.5s infinite; }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(46,204,113,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(46,204,113,0); }
+}
+.status-text { font-size: 12px; color: var(--muted); }
+
+/* ── CONTROLS ── */
+.controls { padding: 20px; display: flex; gap: 12px; }
+
+.btn-main {
+  flex: 1;
+  padding: 18px;
+  border-radius: 14px;
+  border: none;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-start {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-start:active { transform: scale(0.97); background: var(--accent2); }
+.btn-stop {
+  background: rgba(231,76,60,0.15);
+  color: var(--red);
+  border: 1px solid rgba(231,76,60,0.3);
+}
+.btn-stop:active { transform: scale(0.97); background: rgba(231,76,60,0.25); }
+.btn-stop:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-start:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── RATE SETTING ── */
+.rate-section {
+  margin: 0 20px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rate-label { font-size: 12px; color: var(--muted); flex: 1; }
+.rate-input-wrap { display: flex; align-items: center; gap: 6px; }
+.rate-input {
+  width: 64px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px 4px;
+  outline: none;
+}
+.rate-input:focus { border-color: var(--accent); }
+.rate-unit { font-size: 12px; color: var(--muted); }
+
+/* ── RECORDS ── */
+.records-section { padding: 0 20px; margin-top: 8px; }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-title { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+.btn-clear {
+  font-size: 11px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: inherit;
+}
+.btn-clear:hover { color: var(--red); background: rgba(231,76,60,0.1); }
+
+.record-list { display: flex; flex-direction: column; gap: 8px; }
+
+.record-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  align-items: start;
+  transition: border-color 0.2s;
+}
+.record-item:hover { border-color: rgba(184,134,75,0.3); }
+
+.record-left {}
+.record-date-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.record-date {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(184,134,75,0.4);
+  padding-bottom: 1px;
+}
+.record-date-input {
+  font-size: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 2px 6px;
+  outline: none;
+  font-family: inherit;
+}
+.record-note {
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.record-note-input {
+  font-size: 11px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 2px 8px;
+  outline: none;
+  font-family: inherit;
+  width: 160px;
+}
+.record-note-input:focus { border-color: var(--accent); }
+
+.record-detail { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.record-right { text-align: right; }
+.record-fare {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.record-fare-unit { font-size: 11px; color: var(--muted); }
+.record-del {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  margin-top: 4px;
+  display: block;
+  margin-left: auto;
+  transition: color 0.2s;
+}
+.record-del:hover { color: var(--red); }
+
+/* 月份摘要 */
+.month-summary {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.month-label { font-size: 12px; color: var(--muted); }
+.month-stats { display: flex; gap: 16px; }
+.month-stat { text-align: right; }
+.month-val {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.month-stat-lbl { font-size: 10px; color: var(--muted); }
+
+.empty-records {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* GPS 警告 */
+.gps-warning {
+  margin: 0 20px 12px;
+  background: rgba(231,76,60,0.1);
+  border: 1px solid rgba(231,76,60,0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #e98b82;
+  display: none;
+}
+
+/* ── TABS ── */
+.tab-nav {
+  display: flex;
+  margin: 16px 20px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.tab-btn {
+  flex: 1;
+  padding: 9px 8px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+.tab-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── WEEK SUMMARY ── */
+.week-block { margin-bottom: 16px; }
+.week-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #2C3742;
+  border-radius: 10px 10px 0 0;
+  border: 1px solid #2C3742;
+  border-bottom: none;
+}
+.week-title { color: var(--accent) !important; }
+.week-total-val { color: #fff !important; }
+.week-total-lbl { color: rgba(255,255,255,0.5) !important; }
+.week-title { font-size: 11px; color: var(--accent); font-weight: 500; letter-spacing: 1px; }
+.week-totals { display: flex; gap: 14px; }
+.week-total { text-align: right; }
+.week-total-val {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.week-total-lbl { font-size: 10px; color: var(--muted); }
+.week-rows {
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+}
+.week-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.week-row:last-child { border-bottom: none; }
+.week-row:nth-child(even) { background: rgba(255,255,255,0.02); }
+.week-row-date { color: var(--muted); }
+.week-row-note { color: var(--text); font-size: 11px; }
+.week-row-dist { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.week-row-fare {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent2);
+  white-space: nowrap;
+}
+
+/* ── EXPORT BTN ── */
+.export-bar {
+  padding: 0 20px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+}
+.btn-export {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn-export:active { background: var(--surface2); }
+.btn-export.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.view-panel { display: none; }
+.view-panel.active { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="brand">ALUMIBRO · FIELD</div>
+    <div class="header-date" id="header-date"></div>
+  </div>
+
+  <!-- 跳表主顯示 -->
+  <div class="meter-wrap">
+    <div class="meter-label">目前計費</div>
+    <div class="meter-display" id="meter-display">
+      <div class="fare-amount" id="fare-display">0<span class="fare-unit">元</span></div>
+      <div class="meter-stats">
+        <div class="stat-box">
+          <div class="stat-val" id="dist-display">0.0</div>
+          <div class="stat-lbl">公里</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="time-display">00:00</div>
+          <div class="stat-lbl">時間</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="speed-display">0</div>
+          <div class="stat-lbl">km/h</div>
+        </div>
+      </div>
+      <div class="status-row">
+        <div class="status-dot" id="status-dot"></div>
+        <div class="status-text" id="status-text">待機中</div>
+        <div id="wait-badge" style="margin-left:auto;font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(231,76,60,0.12);color:#c0392b;display:none">⏸ 等待中</div>
+      </div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding:0 2px">
+        <span>等待時間：<span id="wait-time-display" style="color:var(--text);font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700">00:00</span></span>
+        <span>等待費：<span id="wait-fare-display" style="color:#e98b82;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700">+0</span>元</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 費率設定 -->
+  <div class="rate-section" style="margin-top:16px">
+    <div class="rate-label">每公里費率</div>
+    <div class="rate-input-wrap">
+      <input type="number" class="rate-input" id="rate-input" value="7" min="1" max="99" step="1">
+      <span class="rate-unit">元 / km</span>
+    </div>
+  </div>
+
+  <!-- 等待費率設定 -->
+  <div class="rate-section" style="margin-top:8px">
+    <div class="rate-label">靜止等待費率<br><small style="font-size:10px;color:var(--muted)">低於 <input type="number" id="stop-speed" value="5" min="1" max="20" step="1" style="width:36px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-align:center;padding:2px 4px;font-size:11px;outline:none"> km/h 視為靜止</small></div>
+    <div class="rate-input-wrap">
+      <input type="number" class="rate-input" id="wait-rate-input" value="1" min="0" max="99" step="0.5">
+      <span class="rate-unit">元 / 分</span>
+    </div>
+  </div>
+
+  <!-- GPS 警告 -->
+  <div class="gps-warning" id="gps-warning">⚠️ 無法取得 GPS 定位，將使用時間估算距離</div>
+
+  <!-- 控制按鈕 -->
+  <div class="controls">
+    <button class="btn-main btn-start" id="btn-start" onclick="startMeter()">
+      ▶ 開始計費
+    </button>
+    <button class="btn-main btn-stop" id="btn-stop" onclick="stopMeter()" disabled>
+      ■ 結束
+    </button>
+  </div>
+
+  <!-- Tab 導覽 -->
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-log" onclick="switchTab('log')">📋 行程紀錄</button>
+    <button class="tab-btn" id="tab-week" onclick="switchTab('week')">📊 週報表</button>
+  </div>
+
+  <!-- 行程紀錄 tab -->
+  <div class="records-section view-panel active" id="panel-log">
+    <div class="section-header" style="margin-top:16px">
+      <div class="section-title">行程紀錄</div>
+      <button class="btn-clear" onclick="clearAll()">清除全部</button>
+    </div>
+    <div id="month-summary-wrap"></div>
+    <div class="record-list" id="record-list"></div>
+  </div>
+
+  <!-- 週報表 tab -->
+  <div class="records-section view-panel" id="panel-week">
+    <div class="export-bar" style="margin-top:16px">
+      <button class="btn-export accent" onclick="exportCSV()">⬇ 匯出 CSV</button>
+      <button class="btn-export" onclick="copyWeekReport()">📋 複製報表</button>
+    </div>
+    <div id="week-report"></div>
+  </div>
+
+</div>
+
+<script>
+// ── 狀態 ────────────────────────────────────────────────────
+let isRunning = false;
+let startTime = null;
+let startPos = null;
+let totalDist = 0;
+let watchId = null;
+let timerInterval = null;
+let lastPos = null;
+let currentSpeed = 0;
+let totalWaitSec = 0;      // 累積靜止秒數
+let isWaiting = false;     // 是否目前靜止
+let waitStartTime = null;  // 本次靜止開始時間
+let records = JSON.parse(localStorage.getItem('field_records') || '[]');
+
+const RATE_KEY = 'field_rate';
+const WAIT_RATE_KEY = 'field_wait_rate';
+const STOP_SPEED_KEY = 'field_stop_speed';
+let ratePerKm = parseFloat(localStorage.getItem(RATE_KEY) || '7');
+let waitRatePerMin = parseFloat(localStorage.getItem(WAIT_RATE_KEY) || '1');
+let stopSpeedKmh = parseFloat(localStorage.getItem(STOP_SPEED_KEY) || '5');
+
+// ── 初始化 ───────────────────────────────────────────────────
+window.onload = function() {
+  document.getElementById('rate-input').value = ratePerKm;
+  document.getElementById('rate-input').addEventListener('change', function() {
+    ratePerKm = parseFloat(this.value) || 7;
+    localStorage.setItem(RATE_KEY, ratePerKm);
+  });
+  document.getElementById('wait-rate-input').value = waitRatePerMin;
+  document.getElementById('wait-rate-input').addEventListener('change', function() {
+    waitRatePerMin = parseFloat(this.value) || 1;
+    localStorage.setItem(WAIT_RATE_KEY, waitRatePerMin);
+  });
+  document.getElementById('stop-speed').value = stopSpeedKmh;
+  document.getElementById('stop-speed').addEventListener('change', function() {
+    stopSpeedKmh = parseFloat(this.value) || 5;
+    localStorage.setItem(STOP_SPEED_KEY, stopSpeedKmh);
+  });
+  updateHeaderDate();
+  renderRecords();
+  setInterval(updateHeaderDate, 60000);
+};
+
+function updateHeaderDate() {
+  const now = new Date();
+  document.getElementById('header-date').textContent =
+    now.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' });
+}
+
+// ── 開始計費 ─────────────────────────────────────────────────
+function startMeter() {
+  if (isRunning) return;
+  isRunning = true;
+  startTime = Date.now();
+  totalDist = 0;
+  lastPos = null;
+  currentSpeed = 0;
+  totalWaitSec = 0;
+  isWaiting = false;
+  waitStartTime = null;
+
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-stop').disabled = false;
+  document.getElementById('meter-display').classList.add('running');
+  document.getElementById('fare-display').classList.add('running');
+  document.getElementById('status-dot').classList.add('active');
+  document.getElementById('status-text').textContent = '計費中...';
+  document.getElementById('rate-input').disabled = true;
+  document.getElementById('wait-rate-input').disabled = true;
+  document.getElementById('stop-speed').disabled = true;
+
+  // GPS
+  if ('geolocation' in navigator) {
+    watchId = navigator.geolocation.watchPosition(
+      onGPS,
+      onGPSError,
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+    );
+  } else {
+    document.getElementById('gps-warning').style.display = 'block';
+    startFallbackTimer();
+  }
+
+  // 計時器（每秒更新）
+  timerInterval = setInterval(updateDisplay, 1000);
+}
+
+// ── GPS 回調 ─────────────────────────────────────────────────
+function onGPS(pos) {
+  document.getElementById('gps-warning').style.display = 'none';
+  currentSpeed = pos.coords.speed ? (pos.coords.speed * 3.6) : 0;
+
+  if (lastPos) {
+    const d = calcDist(
+      lastPos.latitude, lastPos.longitude,
+      pos.coords.latitude, pos.coords.longitude
+    );
+    if (d > 0.005) {
+      totalDist += d;
+    }
+  }
+  lastPos = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+
+  // 靜止偵測
+  if (currentSpeed < stopSpeedKmh) {
+    if (!isWaiting) {
+      isWaiting = true;
+      waitStartTime = Date.now();
+      document.getElementById('wait-badge').style.display = 'block';
+    }
+  } else {
+    if (isWaiting) {
+      // 結束本次靜止，累加等待秒數
+      totalWaitSec += (Date.now() - waitStartTime) / 1000;
+      isWaiting = false;
+      waitStartTime = null;
+      document.getElementById('wait-badge').style.display = 'none';
+    }
+  }
+
+  updateDisplay();
+}
+
+function onGPSError(err) {
+  document.getElementById('gps-warning').style.display = 'block';
+  document.getElementById('status-text').textContent = '計費中（GPS 失敗）';
+}
+
+// ── 備用計時估算（沒有 GPS 時）────────────────────────────────
+let fallbackTimer = null;
+function startFallbackTimer() {
+  // 假設平均時速 40km/h 估算，每秒加 40/3600 km
+  fallbackTimer = setInterval(() => {
+    totalDist += 40 / 3600;
+    updateDisplay();
+  }, 1000);
+}
+
+// ── 更新畫面 ─────────────────────────────────────────────────
+function updateDisplay() {
+  if (!isRunning) return;
+  const elapsed = (Date.now() - startTime) / 1000;
+
+  // 計算目前累積等待秒（含本次正在進行的靜止）
+  const currentWait = isWaiting ? totalWaitSec + (Date.now() - waitStartTime) / 1000 : totalWaitSec;
+  const waitFare = (currentWait / 60) * waitRatePerMin;
+  const distFare = totalDist * ratePerKm;
+  const totalFare = distFare + waitFare;
+
+  document.getElementById('fare-display').innerHTML =
+    `${Math.round(totalFare)}<span class="fare-unit">元</span>`;
+  document.getElementById('dist-display').textContent = totalDist.toFixed(2);
+  document.getElementById('time-display').textContent = formatTime(elapsed);
+  document.getElementById('speed-display').textContent = Math.round(currentSpeed);
+  document.getElementById('wait-time-display').textContent = formatTime(currentWait);
+  document.getElementById('wait-fare-display').textContent = '+' + Math.round(waitFare);
+}
+
+// ── 結束計費 ─────────────────────────────────────────────────
+function stopMeter() {
+  if (!isRunning) return;
+  isRunning = false;
+
+  const elapsed = (Date.now() - startTime) / 1000;
+  // 如果結束時仍在靜止，補算最後一段等待
+  if (isWaiting && waitStartTime) {
+    totalWaitSec += (Date.now() - waitStartTime) / 1000;
+    isWaiting = false;
+  }
+  const waitFare = (totalWaitSec / 60) * waitRatePerMin;
+  const distFare = totalDist * ratePerKm;
+  const fare = Math.round(distFare + waitFare);
+
+  // 清除計時器
+  clearInterval(timerInterval);
+  if (watchId) navigator.geolocation.clearWatch(watchId);
+  if (fallbackTimer) clearInterval(fallbackTimer);
+
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('meter-display').classList.remove('running');
+  document.getElementById('fare-display').classList.remove('running');
+  document.getElementById('status-dot').classList.remove('active');
+  document.getElementById('status-text').textContent = '待機中';
+  document.getElementById('rate-input').disabled = false;
+  document.getElementById('wait-rate-input').disabled = false;
+  document.getElementById('stop-speed').disabled = false;
+  document.getElementById('gps-warning').style.display = 'none';
+  document.getElementById('wait-badge').style.display = 'none';
+  document.getElementById('wait-time-display').textContent = '00:00';
+  document.getElementById('wait-fare-display').textContent = '+0';
+
+  // 重置顯示
+  document.getElementById('fare-display').innerHTML = `0<span class="fare-unit">元</span>`;
+  document.getElementById('dist-display').textContent = '0.0';
+  document.getElementById('time-display').textContent = '00:00';
+  document.getElementById('speed-display').textContent = '0';
+
+  // 儲存紀錄（距離 > 0.05km 才儲存）
+  if (totalDist > 0.05) {
+    const now = new Date();
+    const rec = {
+      id: Date.now(),
+      date: now.toLocaleDateString('zh-TW'),
+      time: now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+      dist: parseFloat(totalDist.toFixed(2)),
+      duration: Math.round(elapsed),
+      waitSec: Math.round(totalWaitSec),
+      fare: fare,
+      rate: ratePerKm,
+      waitRate: waitRatePerMin,
+      note: ''
+    };
+    records.unshift(rec);
+    saveRecords();
+    renderRecords();
+  }
+}
+
+// ── 紀錄渲染 ─────────────────────────────────────────────────
+function renderRecords() {
+  const list = document.getElementById('record-list');
+  const summaryWrap = document.getElementById('month-summary-wrap');
+
+  if (records.length === 0) {
+    list.innerHTML = '<div class="empty-records">尚無行程紀錄<br><small>按下開始計費後自動儲存</small></div>';
+    summaryWrap.innerHTML = '';
+    return;
+  }
+
+  // 月份摘要
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthRecs = records.filter(r => r.date && r.date.startsWith(
+    `${now.getFullYear()}年${now.getMonth()+1}月`
+  ) || (r.date && r.date.includes(`${now.getMonth()+1}月`)));
+
+  // 更寬鬆的月份篩選
+  const allThisMonth = records.filter(r => {
+    if (!r.date) return false;
+    const d = new Date(r.date.replace('年','-').replace('月','-').replace('日',''));
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+
+  const monthDist = allThisMonth.reduce((s,r) => s + r.dist, 0);
+  const monthFare = allThisMonth.reduce((s,r) => s + r.fare, 0);
+
+  summaryWrap.innerHTML = `
+    <div class="month-summary">
+      <div class="month-label">本月統計<br><small style="font-size:10px">${now.getMonth()+1} 月</small></div>
+      <div class="month-stats">
+        <div class="month-stat">
+          <div class="month-val">${monthDist.toFixed(1)}</div>
+          <div class="month-stat-lbl">公里</div>
+        </div>
+        <div class="month-stat">
+          <div class="month-val">NT$${monthFare.toLocaleString()}</div>
+          <div class="month-stat-lbl">費用</div>
+        </div>
+      </div>
+    </div>`;
+
+  list.innerHTML = records.map((r, i) => `
+    <div class="record-item" id="rec-${r.id}">
+      <div class="record-left">
+        <div class="record-date-row">
+          <span class="record-date" onclick="editDate(${r.id})" title="點擊編輯日期">${r.date}</span>
+          <small style="color:var(--muted);font-size:10px">${r.time}</small>
+        </div>
+        <div>
+          <span class="record-note" onclick="editNote(${r.id})" title="點擊編輯備註">
+            ${r.note || '＋ 新增備註'}
+          </span>
+        </div>
+        <div class="record-detail">${r.dist} km · ${formatTime(r.duration)} · 等待${formatTime(r.waitSec||0)} · @${r.rate}元/km</div>
+      </div>
+      <div class="record-right">
+        <div class="record-fare">NT$${r.fare.toLocaleString()}</div>
+        <button class="record-del" onclick="deleteRecord(${r.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── 編輯日期 ─────────────────────────────────────────────────
+function editDate(id) {
+  const rec = records.find(r => r.id === id);
+  if (!rec) return;
+  const item = document.getElementById('rec-' + id);
+  const dateSpan = item.querySelector('.record-date');
+
+  // 轉換為 input[type=date] 格式
+  const d = new Date(rec.date.replace('年','-').replace('月','-').replace('日',''));
+  const isoDate = isNaN(d) ? '' : d.toISOString().slice(0,10);
+
+  dateSpan.outerHTML = `<input type="date" class="record-date-input" id="date-input-${id}"
+    value="${isoDate}" onblur="saveDate(${id})" onkeydown="if(event.key==='Enter')saveDate(${id})">`;
+  document.getElementById('date-input-' + id).focus();
+}
+
+function saveDate(id) {
+  const input = document.getElementById('date-input-' + id);
+  if (!input) return;
+  const val = input.value;
+  if (val) {
+    const d = new Date(val);
+    const rec = records.find(r => r.id === id);
+    if (rec) {
+      rec.date = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+      saveRecords();
+    }
+  }
+  renderRecords();
+}
+
+// ── 編輯備註 ─────────────────────────────────────────────────
+function editNote(id) {
+  const rec = records.find(r => r.id === id);
+  if (!rec) return;
+  const item = document.getElementById('rec-' + id);
+  const noteSpan = item.querySelector('.record-note');
+
+  noteSpan.outerHTML = `<input type="text" class="record-note-input" id="note-input-${id}"
+    value="${rec.note || ''}" placeholder="輸入備註..."
+    onblur="saveNote(${id})" onkeydown="if(event.key==='Enter')saveNote(${id})">`;
+  document.getElementById('note-input-' + id).focus();
+}
+
+function saveNote(id) {
+  const input = document.getElementById('note-input-' + id);
+  if (!input) return;
+  const rec = records.find(r => r.id === id);
+  if (rec) { rec.note = input.value; saveRecords(); }
+  renderRecords();
+}
+
+// ── 刪除 / 清除 ──────────────────────────────────────────────
+function deleteRecord(id) {
+  records = records.filter(r => r.id !== id);
+  saveRecords();
+  renderRecords();
+}
+
+function clearAll() {
+  if (records.length === 0) return;
+  if (confirm('確定要清除所有紀錄嗎？')) {
+    records = [];
+    saveRecords();
+    renderRecords();
+  }
+}
+
+// ── 工具函式 ─────────────────────────────────────────────────
+function saveRecords() {
+  localStorage.setItem('field_records', JSON.stringify(records));
+}
+
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// Haversine 公式計算兩點距離（km）
+function calcDist(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ── Tab 切換 ─────────────────────────────────────────────────
+function switchTab(tab) {
+  ['log','week'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('panel-'+t).classList.toggle('active', t===tab);
+  });
+  if (tab === 'week') renderWeekReport();
+}
+
+// ── 取得某日期是第幾週 ────────────────────────────────────────
+function getWeekKey(dateStr) {
+  // 把中文日期轉成 Date
+  const d = parseDate(dateStr);
+  if (!d) return '未知週';
+  // 找該週的週一
+  const day = d.getDay() || 7; // 0=Sun → 7
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - day + 1);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
+  return `${mon.getFullYear()} 第${getWeekNumber(mon)}週　${fmt(mon)} – ${fmt(sun)}`;
+}
+
+function getWeekNumber(d) {
+  const start = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d - start) / 86400000 + start.getDay() + 1) / 7);
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // 支援 "2026年1月5日" 或 "2026/1/5"
+  const m = str.match(/(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  const d = new Date(str);
+  return isNaN(d) ? null : d;
+}
+
+// ── 週報表渲染 ────────────────────────────────────────────────
+function renderWeekReport() {
+  const wrap = document.getElementById('week-report');
+  if (records.length === 0) {
+    wrap.innerHTML = '<div class="empty-records">尚無行程紀錄</div>';
+    return;
+  }
+
+  // 依週分組
+  const weeks = {};
+  records.forEach(r => {
+    const key = getWeekKey(r.date);
+    if (!weeks[key]) weeks[key] = [];
+    weeks[key].push(r);
+  });
+
+  let html = '';
+  Object.entries(weeks).forEach(([weekLabel, recs]) => {
+    const totalDist = recs.reduce((s,r) => s + r.dist, 0);
+    const totalFare = recs.reduce((s,r) => s + r.fare, 0);
+    const trips = recs.length;
+
+    html += `
+    <div class="week-block">
+      <div class="week-header">
+        <div class="week-title">${weekLabel}　${trips} 趟</div>
+        <div class="week-totals">
+          <div class="week-total">
+            <div class="week-total-val">${totalDist.toFixed(1)} km</div>
+            <div class="week-total-lbl">總里程</div>
+          </div>
+          <div class="week-total">
+            <div class="week-total-val" style="color:var(--accent2)">NT$${totalFare.toLocaleString()}</div>
+            <div class="week-total-lbl">總費用</div>
+          </div>
+        </div>
+      </div>
+      <div class="week-rows">
+        ${recs.map(r => `
+        <div class="week-row">
+          <div>
+            <div class="week-row-date">${r.date} ${r.time}</div>
+            <div class="week-row-note">${r.note || '—'}</div>
+          </div>
+          <div class="week-row-dist">${r.dist} km</div>
+          <div class="week-row-dist">${formatTime(r.duration)}</div>
+          <div class="week-row-fare">NT$${r.fare.toLocaleString()}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  });
+
+  // 總計
+  const grandDist = records.reduce((s,r) => s + r.dist, 0);
+  const grandFare = records.reduce((s,r) => s + r.fare, 0);
+  html += `
+    <div class="month-summary" style="margin-top:8px">
+      <div class="month-label" style="font-weight:500;color:var(--text)">全部合計</div>
+      <div class="month-stats">
+        <div class="month-stat">
+          <div class="month-val">${grandDist.toFixed(1)}</div>
+          <div class="month-stat-lbl">公里</div>
+        </div>
+        <div class="month-stat">
+          <div class="month-val" style="color:var(--accent2)">NT$${grandFare.toLocaleString()}</div>
+          <div class="month-stat-lbl">費用</div>
+        </div>
+      </div>
+    </div>`;
+
+  wrap.innerHTML = html;
+}
+
+// ── 匯出 CSV ─────────────────────────────────────────────────
+function exportCSV() {
+  if (records.length === 0) { alert('沒有紀錄可匯出'); return; }
+  let csv = '\uFEFF日期,時間,週次,備註,距離(km),行駛時間,費率,費用(NT$)\n';
+  records.forEach(r => {
+    const week = getWeekKey(r.date).replace(/　/g,' ');
+    csv += `"${r.date}","${r.time}","${week}","${r.note || ''}",${r.dist},"${formatTime(r.duration)}",${r.rate},${r.fare}\n`;
+  });
+  // 週小計
+  csv += '\n週次,趟數,總里程(km),總費用(NT$)\n';
+  const weeks = {};
+  records.forEach(r => {
+    const k = getWeekKey(r.date);
+    if (!weeks[k]) weeks[k] = { trips:0, dist:0, fare:0 };
+    weeks[k].trips++; weeks[k].dist += r.dist; weeks[k].fare += r.fare;
+  });
+  Object.entries(weeks).forEach(([k,v]) => {
+    csv += `"${k}",${v.trips},${v.dist.toFixed(2)},${v.fare}\n`;
+  });
+
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  const month = new Date().toLocaleDateString('zh-TW',{year:'numeric',month:'2-digit'}).replace('/','年').replace('/','月');
+  a.download = `外勤里程_${month}.csv`;
+  a.click();
+}
+
+// ── 複製週報表文字 ────────────────────────────────────────────
+function copyWeekReport() {
+  if (records.length === 0) { alert('沒有紀錄'); return; }
+  const weeks = {};
+  records.forEach(r => {
+    const k = getWeekKey(r.date);
+    if (!weeks[k]) weeks[k] = [];
+    weeks[k].push(r);
+  });
+  let text = '📋 外勤里程週報表\n' + '='.repeat(30) + '\n';
+  Object.entries(weeks).forEach(([k,recs]) => {
+    const dist = recs.reduce((s,r)=>s+r.dist,0);
+    const fare = recs.reduce((s,r)=>s+r.fare,0);
+    text += `\n${k}\n`;
+    recs.forEach(r => {
+      text += `  ${r.date} ${r.time}  ${r.dist}km  NT$${r.fare}${r.note?' ('+r.note+')':''}\n`;
+    });
+    text += `  小計：${dist.toFixed(1)}km  NT$${fare.toLocaleString()}\n`;
+  });
+  const grand = records.reduce((s,r)=>s+r.fare,0);
+  text += `\n${'='.repeat(30)}\n總計：NT$${grand.toLocaleString()}`;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('已複製！可貼到 LINE 或 Email 送出');
+  });
+}
+</script>
+</body>
+</html>
