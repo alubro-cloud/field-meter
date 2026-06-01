@@ -459,6 +459,112 @@ body::before {
 
 .view-panel { display: none; }
 .view-panel.active { display: block; }
+
+/* ── 確認送出卡片 ── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+.confirm-card {
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px 36px;
+  width: 100%;
+  max-width: 480px;
+  animation: slideUp 0.25s ease;
+}
+@keyframes slideUp { from { transform:translateY(40px); opacity:0 } to { transform:translateY(0); opacity:1 } }
+.confirm-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.confirm-title::before {
+  content: '';
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.confirm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.confirm-row:last-of-type { border-bottom: none; }
+.confirm-lbl { font-size: 12px; color: var(--muted); }
+.confirm-val {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.confirm-val.accent { color: var(--accent); }
+.confirm-edit {
+  font-size: 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 6px 10px;
+  outline: none;
+  font-family: 'Noto Sans TC', sans-serif;
+  text-align: right;
+}
+.confirm-edit:focus { border-color: var(--accent); }
+.confirm-note-input {
+  font-size: 13px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 6px 10px;
+  outline: none;
+  font-family: 'Noto Sans TC', sans-serif;
+  width: 200px;
+}
+.confirm-note-input:focus { border-color: var(--accent); }
+.confirm-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.confirm-btns button {
+  flex: 1;
+  padding: 15px;
+  border-radius: 12px;
+  border: none;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-confirm-cancel {
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid var(--border) !important;
+}
+.btn-confirm-send {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-confirm-send:active { background: var(--accent2); transform: scale(0.97); }
 </style>
 </head>
 <body>
@@ -796,9 +902,83 @@ function stopMeter() {
     records.unshift(rec);
     saveRecords();
     renderRecords();
-    // 自動同步到 Google Sheets
-    syncToSheet(rec);
+    // 顯示確認卡片，讓使用者先確認/編輯再送出
+    showConfirmCard(rec);
   }
+}
+
+// ── 確認送出卡片 ─────────────────────────────────────────────
+function showConfirmCard(rec) {
+  // 把時間轉成 HH:MM（24h）供 input[type=time]
+  let timeVal = '';
+  const m = rec.time.match(/(\d+):(\d+)/);
+  if (m) {
+    let h = parseInt(m[1]);
+    const min = m[2];
+    if (rec.time.includes('下午') && h < 12) h += 12;
+    if (rec.time.includes('上午') && h === 12) h = 0;
+    timeVal = `${String(h).padStart(2,'0')}:${min}`;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.id = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-card">
+      <div class="confirm-title">確認行程資料</div>
+      <div class="confirm-row">
+        <span class="confirm-lbl">距離</span>
+        <span class="confirm-val">${rec.dist} <small style="font-size:13px;color:var(--muted)">km</small></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-lbl">費用</span>
+        <span class="confirm-val accent">NT$ ${rec.fare.toLocaleString()}</span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-lbl">時間</span>
+        <input type="time" class="confirm-edit" id="confirm-time" value="${timeVal}">
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-lbl">備註</span>
+        <input type="text" class="confirm-note-input" id="confirm-note" value="${rec.note || ''}" placeholder="輸入備註（可空白）">
+      </div>
+      <div class="confirm-btns">
+        <button class="btn-confirm-cancel" onclick="dismissConfirm()">略過同步</button>
+        <button class="btn-confirm-send" onclick="confirmSend(${rec.id})">☁ 確認送出</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  // 自動聚焦備註欄，方便快速填寫
+  setTimeout(() => document.getElementById('confirm-note').focus(), 300);
+}
+
+function dismissConfirm() {
+  const el = document.getElementById('confirm-overlay');
+  if (el) el.remove();
+}
+
+async function confirmSend(id) {
+  const timeInput = document.getElementById('confirm-time');
+  const noteInput = document.getElementById('confirm-note');
+  const rec = records.find(r => r.id === id);
+  if (!rec) { dismissConfirm(); return; }
+
+  // 更新時間
+  if (timeInput && timeInput.value) {
+    const [h, mn] = timeInput.value.split(':').map(Number);
+    const period = h >= 12 ? '下午' : '上午';
+    const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+    rec.time = `${period} ${String(h12).padStart(2,'0')}:${String(mn).padStart(2,'0')}`;
+  }
+  // 更新備註
+  if (noteInput) rec.note = noteInput.value;
+
+  saveRecords();
+  renderRecords();
+  dismissConfirm();
+  // 現在才同步
+  syncToSheet(rec);
 }
 
 // ── 同步到 Google Sheets ─────────────────────────────────────
