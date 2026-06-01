@@ -541,7 +541,11 @@ body::before {
   <div class="records-section view-panel active" id="panel-log">
     <div class="section-header" style="margin-top:16px">
       <div class="section-title">行程紀錄</div>
-      <button class="btn-clear" onclick="clearAll()">清除全部</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="sync-status" style="font-size:11px"></span>
+        <button class="btn-clear" onclick="syncAll()" style="color:var(--accent)">☁ 全部同步</button>
+        <button class="btn-clear" onclick="clearAll()">清除</button>
+      </div>
     </div>
     <div id="month-summary-wrap"></div>
     <div class="record-list" id="record-list"></div>
@@ -572,6 +576,22 @@ let totalWaitSec = 0;      // 累積靜止秒數
 let isWaiting = false;     // 是否目前靜止
 let waitStartTime = null;  // 本次靜止開始時間
 let records = JSON.parse(localStorage.getItem('field_records') || '[]');
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbzqBM6EBLHChEp-q-WopzPFUzsXeIRLFkB_mQNC4v-4G-m1bzQi3tb6rzxZ6WkAl9Hg/exec';
+
+// ── Google Sheets API ────────────────────────────────────────
+async function callAPI(action, data = {}) {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, ...data })
+    });
+    return await res.json();
+  } catch(e) {
+    return { ok: false, msg: e.message };
+  }
+}
 
 const RATE_KEY = 'field_rate';
 const WAIT_RATE_KEY = 'field_wait_rate';
@@ -775,6 +795,43 @@ function stopMeter() {
     records.unshift(rec);
     saveRecords();
     renderRecords();
+    // 自動同步到 Google Sheets
+    syncToSheet(rec);
+  }
+}
+
+// ── 同步到 Google Sheets ─────────────────────────────────────
+async function syncToSheet(rec) {
+  const statusEl = document.getElementById('sync-status');
+  if (statusEl) { statusEl.textContent = '☁ 同步中...'; statusEl.style.color = 'var(--muted)'; }
+  const res = await callAPI('saveTrip', { data: rec });
+  if (statusEl) {
+    if (res.ok) {
+      statusEl.textContent = '✓ 已同步至 Google Sheets';
+      statusEl.style.color = 'var(--green)';
+    } else {
+      statusEl.textContent = '⚠ 同步失敗（已存本機）';
+      statusEl.style.color = 'var(--red)';
+    }
+    setTimeout(() => { if(statusEl) statusEl.textContent = ''; }, 4000);
+  }
+}
+
+// ── 全部同步 ─────────────────────────────────────────────────
+async function syncAll() {
+  if (records.length === 0) return;
+  const statusEl = document.getElementById('sync-status');
+  if (statusEl) { statusEl.textContent = `☁ 同步中 0/${records.length}...`; statusEl.style.color = 'var(--muted)'; }
+  let ok = 0;
+  for (let i = 0; i < records.length; i++) {
+    const res = await callAPI('saveTrip', { data: records[i] });
+    if (res.ok) ok++;
+    if (statusEl) statusEl.textContent = `☁ 同步中 ${i+1}/${records.length}...`;
+  }
+  if (statusEl) {
+    statusEl.textContent = `✓ 已同步 ${ok}/${records.length} 筆`;
+    statusEl.style.color = 'var(--green)';
+    setTimeout(() => { if(statusEl) statusEl.textContent = ''; }, 4000);
   }
 }
 
@@ -890,15 +947,16 @@ function saveNote(id) {
   const input = document.getElementById('note-input-' + id);
   if (!input) return;
   const rec = records.find(r => r.id === id);
-  if (rec) { rec.note = input.value; saveRecords(); }
+  if (rec) { rec.note = input.value; saveRecords(); syncToSheet(rec); }
   renderRecords();
 }
 
 // ── 刪除 / 清除 ──────────────────────────────────────────────
-function deleteRecord(id) {
+async function deleteRecord(id) {
   records = records.filter(r => r.id !== id);
   saveRecords();
   renderRecords();
+  await callAPI('deleteTrip', { tripId: id });
 }
 
 function clearAll() {
