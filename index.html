@@ -618,8 +618,9 @@ window.onload = function() {
     localStorage.setItem(STOP_SPEED_KEY, stopSpeedKmh);
   });
   updateHeaderDate();
-  renderRecords();
   setInterval(updateHeaderDate, 60000);
+  // 啟動時從 Sheets 載入最新資料
+  loadFromSheet();
 };
 
 function updateHeaderDate() {
@@ -777,8 +778,8 @@ function stopMeter() {
   document.getElementById('time-display').textContent = '00:00';
   document.getElementById('speed-display').textContent = '0';
 
-  // 儲存紀錄（距離 > 0.05km 才儲存）
-  if (totalDist > 0.05) {
+  // 儲存紀錄（行駛時間 > 5秒 就儲存）
+  if (elapsed > 5) {
     const now = new Date();
     const rec = {
       id: Date.now(),
@@ -835,6 +836,29 @@ async function syncAll() {
   }
 }
 
+// ── 從 Sheets 載入 ──────────────────────────────────────────
+async function loadFromSheet() {
+  const statusEl = document.getElementById('sync-status');
+  if (statusEl) { statusEl.textContent = '☁ 載入中...'; statusEl.style.color = 'var(--muted)'; }
+  const res = await callAPI('loadTrips');
+  if (res.ok && res.list && res.list.length > 0) {
+    // 合併：以 Sheets 為主，本機有但 Sheets 沒有的也保留
+    const sheetIds = new Set(res.list.map(r => String(r.id)));
+    const localOnly = records.filter(r => !sheetIds.has(String(r.id)));
+    records = [...res.list.reverse(), ...localOnly]
+      .sort((a, b) => b.id - a.id);
+    saveRecords();
+    if (statusEl) {
+      statusEl.textContent = `✓ 已載入 ${res.list.length} 筆`;
+      statusEl.style.color = 'var(--green)';
+      setTimeout(() => { if(statusEl) statusEl.textContent = ''; }, 3000);
+    }
+  } else {
+    if (statusEl) { statusEl.textContent = ''; }
+  }
+  renderRecords();
+}
+
 // ── 紀錄渲染 ─────────────────────────────────────────────────
 function renderRecords() {
   const list = document.getElementById('record-list');
@@ -883,7 +907,7 @@ function renderRecords() {
       <div class="record-left">
         <div class="record-date-row">
           <span class="record-date" onclick="editDate(${r.id})" title="點擊編輯日期">${r.date}</span>
-          <small style="color:var(--muted);font-size:10px">${r.time}</small>
+          <span class="record-date" onclick="editTime(${r.id})" title="點擊編輯時間" style="font-size:11px;border-bottom:1px dashed rgba(184,134,75,0.4)">${r.time}</span>
         </div>
         <div>
           <span class="record-note" onclick="editNote(${r.id})" title="點擊編輯備註">
@@ -925,6 +949,50 @@ function saveDate(id) {
     if (rec) {
       rec.date = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
       saveRecords();
+    }
+  }
+  renderRecords();
+}
+
+// ── 編輯時間 ─────────────────────────────────────────────────
+function editTime(id) {
+  const rec = records.find(r => r.id === id);
+  if (!rec) return;
+  const item = document.getElementById('rec-' + id);
+  const timeSpan = item.querySelectorAll('.record-date')[1];
+  if (!timeSpan) return;
+
+  // 把 "下午 02:30" 轉成 "14:30"
+  let timeVal = '';
+  if (rec.time) {
+    const m = rec.time.match(/(\d+):(\d+)/);
+    if (m) {
+      let h = parseInt(m[1]);
+      const min = m[2];
+      if (rec.time.includes('下午') && h < 12) h += 12;
+      if (rec.time.includes('上午') && h === 12) h = 0;
+      timeVal = `${String(h).padStart(2,'0')}:${min}`;
+    }
+  }
+
+  timeSpan.outerHTML = `<input type="time" class="record-date-input" id="time-input-${id}"
+    value="${timeVal}" onblur="saveTime(${id})" onkeydown="if(event.key==='Enter')saveTime(${id})">`;
+  document.getElementById('time-input-' + id).focus();
+}
+
+function saveTime(id) {
+  const input = document.getElementById('time-input-' + id);
+  if (!input) return;
+  const val = input.value;
+  if (val) {
+    const rec = records.find(r => r.id === id);
+    if (rec) {
+      const [h, m] = val.split(':').map(Number);
+      const period = h >= 12 ? '下午' : '上午';
+      const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+      rec.time = `${period} ${String(h12).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      saveRecords();
+      syncToSheet(rec);
     }
   }
   renderRecords();
