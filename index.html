@@ -606,21 +606,10 @@ body::before {
     </div>
   </div>
 
-  <!-- 費率設定 -->
-  <div class="rate-section" style="margin-top:16px">
-    <div class="rate-label">每公里費率</div>
-    <div class="rate-input-wrap">
-      <input type="number" class="rate-input" id="rate-input" value="7" min="1" max="99" step="1">
-      <span class="rate-unit">元 / km</span>
-    </div>
-  </div>
-
-  <!-- 等待費率設定 -->
-  <div class="rate-section" style="margin-top:8px">
-    <div class="rate-label">靜止等待費率<br><small style="font-size:10px;color:var(--muted)">低於 <input type="number" id="stop-speed" value="5" min="1" max="20" step="1" style="width:36px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-align:center;padding:2px 4px;font-size:11px;outline:none"> km/h 視為靜止</small></div>
-    <div class="rate-input-wrap">
-      <input type="number" class="rate-input" id="wait-rate-input" value="1" min="0" max="99" step="0.5">
-      <span class="rate-unit">元 / 分</span>
+  <!-- 固定費率顯示 -->
+  <div class="rate-section" style="margin-top:16px;justify-content:center">
+    <div class="rate-label" style="flex:none;text-align:center">
+      費率　<b style="color:var(--accent)">7</b> 元/km　·　等待　<b style="color:var(--accent)">2</b> 元/分　<small style="font-size:10px">(低於 5 km/h 視為靜止)</small>
     </div>
   </div>
 
@@ -634,6 +623,13 @@ body::before {
     </button>
     <button class="btn-main btn-stop" id="btn-stop" onclick="stopMeter()" disabled>
       ■ 結束
+    </button>
+  </div>
+
+  <!-- 手動新增 -->
+  <div style="padding:0 20px 4px">
+    <button onclick="openManualForm()" style="width:100%;padding:14px;border-radius:14px;border:1px dashed var(--accent);background:rgba(184,134,75,0.06);color:var(--accent2);font-family:'Noto Sans TC',sans-serif;font-size:15px;font-weight:500;cursor:pointer">
+      ✍ 手動新增一筆
     </button>
   </div>
 
@@ -683,7 +679,7 @@ let isWaiting = false;     // 是否目前靜止
 let waitStartTime = null;  // 本次靜止開始時間
 let records = JSON.parse(localStorage.getItem('field_records') || '[]');
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbzqBM6EBLHChEp-q-WopzPFUzsXeIRLFkB_mQNC4v-4G-m1bzQi3tb6rzxZ6WkAl9Hg/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbx0Kus_0V5MvaCpuWoGQ3241ZPVhd20_fOQTDL91Xy-LPI1CGa3YvpKoNp6qosu7_2i2A/exec';
 
 // ── Google Sheets API ────────────────────────────────────────
 async function callAPI(action, data = {}) {
@@ -699,30 +695,13 @@ async function callAPI(action, data = {}) {
   }
 }
 
-const RATE_KEY = 'field_rate';
-const WAIT_RATE_KEY = 'field_wait_rate';
-const STOP_SPEED_KEY = 'field_stop_speed';
-let ratePerKm = parseFloat(localStorage.getItem(RATE_KEY) || '7');
-let waitRatePerMin = parseFloat(localStorage.getItem(WAIT_RATE_KEY) || '1');
-let stopSpeedKmh = parseFloat(localStorage.getItem(STOP_SPEED_KEY) || '5');
+// ── 費率（寫死）──────────────────────────────────────────────
+const ratePerKm = 7;       // 每公里 7 元
+const waitRatePerMin = 2;  // 靜止等待每分 2 元
+const stopSpeedKmh = 5;    // 低於 5 km/h 視為靜止
 
 // ── 初始化 ───────────────────────────────────────────────────
 window.onload = function() {
-  document.getElementById('rate-input').value = ratePerKm;
-  document.getElementById('rate-input').addEventListener('change', function() {
-    ratePerKm = parseFloat(this.value) || 7;
-    localStorage.setItem(RATE_KEY, ratePerKm);
-  });
-  document.getElementById('wait-rate-input').value = waitRatePerMin;
-  document.getElementById('wait-rate-input').addEventListener('change', function() {
-    waitRatePerMin = parseFloat(this.value) || 1;
-    localStorage.setItem(WAIT_RATE_KEY, waitRatePerMin);
-  });
-  document.getElementById('stop-speed').value = stopSpeedKmh;
-  document.getElementById('stop-speed').addEventListener('change', function() {
-    stopSpeedKmh = parseFloat(this.value) || 5;
-    localStorage.setItem(STOP_SPEED_KEY, stopSpeedKmh);
-  });
   updateHeaderDate();
   setInterval(updateHeaderDate, 60000);
   // 啟動時從 Sheets 載入最新資料
@@ -753,9 +732,6 @@ function startMeter() {
   document.getElementById('fare-display').classList.add('running');
   document.getElementById('status-dot').classList.add('active');
   document.getElementById('status-text').textContent = '計費中...';
-  document.getElementById('rate-input').disabled = true;
-  document.getElementById('wait-rate-input').disabled = true;
-  document.getElementById('stop-speed').disabled = true;
 
   // GPS
   if ('geolocation' in navigator) {
@@ -836,12 +812,12 @@ function updateDisplay() {
   const totalFare = distFare + waitFare;
 
   document.getElementById('fare-display').innerHTML =
-    `${Math.round(totalFare)}<span class="fare-unit">元</span>`;
+    `${fmtMoney(totalFare)}<span class="fare-unit">元</span>`;
   document.getElementById('dist-display').textContent = totalDist.toFixed(2);
   document.getElementById('time-display').textContent = formatTime(elapsed);
   document.getElementById('speed-display').textContent = Math.round(currentSpeed);
   document.getElementById('wait-time-display').textContent = formatTime(currentWait);
-  document.getElementById('wait-fare-display').textContent = '+' + Math.round(waitFare);
+  document.getElementById('wait-fare-display').textContent = '+' + fmtMoney(waitFare);
 }
 
 // ── 結束計費 ─────────────────────────────────────────────────
@@ -857,7 +833,7 @@ function stopMeter() {
   }
   const waitFare = (totalWaitSec / 60) * waitRatePerMin;
   const distFare = totalDist * ratePerKm;
-  const fare = Math.round(distFare + waitFare);
+  const fare = round1(distFare + waitFare);
 
   // 清除計時器
   clearInterval(timerInterval);
@@ -870,9 +846,6 @@ function stopMeter() {
   document.getElementById('fare-display').classList.remove('running');
   document.getElementById('status-dot').classList.remove('active');
   document.getElementById('status-text').textContent = '待機中';
-  document.getElementById('rate-input').disabled = false;
-  document.getElementById('wait-rate-input').disabled = false;
-  document.getElementById('stop-speed').disabled = false;
   document.getElementById('gps-warning').style.display = 'none';
   document.getElementById('wait-badge').style.display = 'none';
   document.getElementById('wait-time-display').textContent = '00:00';
@@ -903,82 +876,146 @@ function stopMeter() {
     saveRecords();
     renderRecords();
     // 顯示確認卡片，讓使用者先確認/編輯再送出
-    showConfirmCard(rec);
+    showTripCard(rec, false);
   }
 }
 
-// ── 確認送出卡片 ─────────────────────────────────────────────
-function showConfirmCard(rec) {
-  // 把時間轉成 HH:MM（24h）供 input[type=time]
+// ── 行程卡片（結束確認 + 手動新增 共用）──────────────────────
+// isNew=false：剛跑完的紀錄（已在 records 裡），存檔=更新並同步
+// isNew=true ：手動新增的空白草稿（尚未加入 records），存檔=新增並同步
+function showTripCard(rec, isNew) {
+  // 時間轉 HH:MM
   let timeVal = '';
-  const m = rec.time.match(/(\d+):(\d+)/);
-  if (m) {
-    let h = parseInt(m[1]);
-    const min = m[2];
-    if (rec.time.includes('下午') && h < 12) h += 12;
-    if (rec.time.includes('上午') && h === 12) h = 0;
-    timeVal = `${String(h).padStart(2,'0')}:${min}`;
+  if (rec.time) {
+    const m = rec.time.match(/(\d+):(\d+)/);
+    if (m) {
+      let h = parseInt(m[1]); const min = m[2];
+      if (rec.time.includes('下午') && h < 12) h += 12;
+      if (rec.time.includes('上午') && h === 12) h = 0;
+      timeVal = `${String(h).padStart(2,'0')}:${min}`;
+    }
   }
+  // 日期轉 ISO
+  let dateVal = '';
+  const d = parseDate(rec.date);
+  if (d) dateVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  // 把目前資料暫存給即時重算用
+  window._cardRec = rec;
 
   const overlay = document.createElement('div');
   overlay.className = 'confirm-overlay';
   overlay.id = 'confirm-overlay';
   overlay.innerHTML = `
     <div class="confirm-card">
-      <div class="confirm-title">確認行程資料</div>
+      <div class="confirm-title">${isNew ? '手動新增行程' : '確認行程資料'}</div>
       <div class="confirm-row">
-        <span class="confirm-lbl">距離</span>
-        <span class="confirm-val">${rec.dist} <small style="font-size:13px;color:var(--muted)">km</small></span>
-      </div>
-      <div class="confirm-row">
-        <span class="confirm-lbl">費用</span>
-        <span class="confirm-val accent">NT$ ${rec.fare.toLocaleString()}</span>
+        <span class="confirm-lbl">日期</span>
+        <input type="date" class="confirm-edit" id="confirm-date" value="${dateVal}">
       </div>
       <div class="confirm-row">
         <span class="confirm-lbl">時間</span>
         <input type="time" class="confirm-edit" id="confirm-time" value="${timeVal}">
       </div>
       <div class="confirm-row">
+        <span class="confirm-lbl">公里數</span>
+        <input type="number" class="confirm-edit" id="confirm-dist" value="${rec.dist || ''}" min="0" step="0.1" style="width:110px" oninput="recalcCard()">
+      </div>
+      ${rec.waitSec ? `
+      <div class="confirm-row">
+        <span class="confirm-lbl">等待費</span>
+        <span class="confirm-val" style="font-size:15px">${formatTime(rec.waitSec)} · +${fmtMoney((rec.waitSec/60)*waitRatePerMin)} 元</span>
+      </div>` : ''}
+      <div class="confirm-row">
+        <span class="confirm-lbl">費用（自動）</span>
+        <span class="confirm-val accent" id="confirm-fare">NT$ ${fmtMoney(rec.fare || 0)}</span>
+      </div>
+      <div class="confirm-row">
         <span class="confirm-lbl">備註</span>
         <input type="text" class="confirm-note-input" id="confirm-note" value="${rec.note || ''}" placeholder="輸入備註（可空白）">
       </div>
       <div class="confirm-btns">
-        <button class="btn-confirm-cancel" onclick="dismissConfirm()">略過同步</button>
-        <button class="btn-confirm-send" onclick="confirmSend(${rec.id})">☁ 確認送出</button>
+        <button class="btn-confirm-cancel" onclick="dismissConfirm(${isNew})">${isNew ? '取消' : '略過同步'}</button>
+        <button class="btn-confirm-send" onclick="saveTripCard(${rec.id}, ${isNew})">${isNew ? '💾 存檔並同步' : '☁ 確認送出'}</button>
       </div>
-    </div>
-  `;
+    </div>`;
   document.body.appendChild(overlay);
-  // 自動聚焦備註欄，方便快速填寫
-  setTimeout(() => document.getElementById('confirm-note').focus(), 300);
+  setTimeout(() => { const el = document.getElementById(isNew ? 'confirm-dist' : 'confirm-note'); if (el) el.focus(); }, 300);
 }
 
-function dismissConfirm() {
+// 即時重算金額：公里 × 7 + 等待費
+function recalcCard() {
+  const rec = window._cardRec || {};
+  const dist = parseFloat(document.getElementById('confirm-dist').value) || 0;
+  const waitFare = ((rec.waitSec || 0) / 60) * waitRatePerMin;
+  const fare = round1(dist * ratePerKm + waitFare);
+  document.getElementById('confirm-fare').textContent = 'NT$ ' + fmtMoney(fare);
+}
+
+function dismissConfirm(isNew) {
   const el = document.getElementById('confirm-overlay');
   if (el) el.remove();
+  // 手動新增按「取消」時不留任何東西；結束確認按「略過」時本機已存，僅不同步
 }
 
-async function confirmSend(id) {
+async function saveTripCard(id, isNew) {
+  const dateInput = document.getElementById('confirm-date');
   const timeInput = document.getElementById('confirm-time');
+  const distInput = document.getElementById('confirm-dist');
   const noteInput = document.getElementById('confirm-note');
-  const rec = records.find(r => r.id === id);
-  if (!rec) { dismissConfirm(); return; }
 
-  // 更新時間
+  // 取得或建立 rec
+  let rec = isNew ? window._cardRec : records.find(r => r.id === id);
+  if (!rec) { dismissConfirm(isNew); return; }
+
+  // 日期
+  if (dateInput && dateInput.value) {
+    const dd = new Date(dateInput.value);
+    rec.date = `${dd.getFullYear()}年${dd.getMonth()+1}月${dd.getDate()}日`;
+  }
+  // 時間
   if (timeInput && timeInput.value) {
     const [h, mn] = timeInput.value.split(':').map(Number);
     const period = h >= 12 ? '下午' : '上午';
     const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
     rec.time = `${period} ${String(h12).padStart(2,'0')}:${String(mn).padStart(2,'0')}`;
   }
-  // 更新備註
+  // 公里 + 金額重算
+  rec.dist = parseFloat(distInput.value) || 0;
+  const waitFare = ((rec.waitSec || 0) / 60) * waitRatePerMin;
+  rec.fare = round1(rec.dist * ratePerKm + waitFare);
+  rec.rate = ratePerKm;
+  rec.waitRate = waitRatePerMin;
+  // 備註
   if (noteInput) rec.note = noteInput.value;
+
+  // 手動新增：現在才加入 records
+  if (isNew) records.unshift(rec);
 
   saveRecords();
   renderRecords();
-  dismissConfirm();
-  // 現在才同步
+  dismissConfirm(isNew);
   syncToSheet(rec);
+}
+
+// ── 手動新增（空白卡）────────────────────────────────────────
+function openManualForm() {
+  const now = new Date();
+  const period = now.getHours() >= 12 ? '下午' : '上午';
+  const h12 = now.getHours() > 12 ? now.getHours()-12 : (now.getHours()===0 ? 12 : now.getHours());
+  const rec = {
+    id: Date.now(),
+    date: now.toLocaleDateString('zh-TW'),
+    time: `${period} ${String(h12).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    dist: '',
+    duration: 0,
+    waitSec: 0,
+    fare: 0,
+    rate: ratePerKm,
+    waitRate: waitRatePerMin,
+    note: ''
+  };
+  showTripCard(rec, true);
 }
 
 // ── 同步到 Google Sheets ─────────────────────────────────────
@@ -1026,7 +1063,7 @@ async function loadFromSheet() {
     const sheetIds = new Set(res.list.map(r => String(r.id)));
     const localOnly = records.filter(r => !sheetIds.has(String(r.id)));
     records = [...res.list.reverse(), ...localOnly]
-      .sort((a, b) => b.id - a.id);
+      .sort((a, b) => recTimestamp(b) - recTimestamp(a));
     saveRecords();
     if (statusEl) {
       statusEl.textContent = `✓ 已載入 ${res.list.length} 筆`;
@@ -1052,16 +1089,11 @@ function renderRecords() {
 
   // 月份摘要
   const now = new Date();
-  const thisMonth = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
-  const monthRecs = records.filter(r => r.date && r.date.startsWith(
-    `${now.getFullYear()}年${now.getMonth()+1}月`
-  ) || (r.date && r.date.includes(`${now.getMonth()+1}月`)));
 
-  // 更寬鬆的月份篩選
+  // 用穩定的 parseDate（同時支援 2026/6/2 與 2026年6月2日，手機也能讀）
   const allThisMonth = records.filter(r => {
-    if (!r.date) return false;
-    const d = new Date(r.date.replace('年','-').replace('月','-').replace('日',''));
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const d = parseDate(r.date);
+    return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 
   const monthDist = allThisMonth.reduce((s,r) => s + r.dist, 0);
@@ -1076,13 +1108,14 @@ function renderRecords() {
           <div class="month-stat-lbl">公里</div>
         </div>
         <div class="month-stat">
-          <div class="month-val">NT$${monthFare.toLocaleString()}</div>
+          <div class="month-val">NT$${fmtMoney(monthFare)}</div>
           <div class="month-stat-lbl">費用</div>
         </div>
       </div>
     </div>`;
 
-  list.innerHTML = records.map((r, i) => `
+  const sorted = [...records].sort((a, b) => recTimestamp(b) - recTimestamp(a));
+  list.innerHTML = sorted.map((r, i) => `
     <div class="record-item" id="rec-${r.id}">
       <div class="record-left">
         <div class="record-date-row">
@@ -1097,7 +1130,7 @@ function renderRecords() {
         <div class="record-detail">${r.dist} km · ${formatTime(r.duration)} · 等待${formatTime(r.waitSec||0)} · @${r.rate}元/km</div>
       </div>
       <div class="record-right">
-        <div class="record-fare">NT$${r.fare.toLocaleString()}</div>
+        <div class="record-fare">NT$${fmtMoney(r.fare)}</div>
         <button class="record-del" onclick="deleteRecord(${r.id})">✕</button>
       </div>
     </div>`).join('');
@@ -1227,6 +1260,29 @@ function formatTime(sec) {
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
+// 金額：四捨五入到小數點一位（例 24.5），整數時不顯示 .0
+function round1(x) { return Math.round((Number(x) || 0) * 10) / 10; }
+function fmtMoney(x) {
+  return round1(x).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+}
+
+// 用「行程日期 + 時間」算出可排序的時間戳（給清單照時間軸排序用）
+function recTimestamp(r) {
+  const d = parseDate(r.date);
+  if (!d) return 0;
+  let h = 0, mn = 0;
+  if (r.time) {
+    const m = r.time.match(/(\d+):(\d+)/);
+    if (m) {
+      h = parseInt(m[1]); mn = parseInt(m[2]);
+      if (r.time.includes('下午') && h < 12) h += 12;
+      if (r.time.includes('上午') && h === 12) h = 0;
+    }
+  }
+  d.setHours(h, mn, 0, 0);
+  return d.getTime();
+}
+
 // Haversine 公式計算兩點距離（km）
 function calcDist(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -1293,7 +1349,14 @@ function renderWeekReport() {
   });
 
   let html = '';
-  Object.entries(weeks).forEach(([weekLabel, recs]) => {
+  // 週區塊：新的週排前面；週內每筆依行程時間軸（舊到新）
+  const weekEntries = Object.entries(weeks).sort((a, b) => {
+    const ta = Math.max(...a[1].map(recTimestamp));
+    const tb = Math.max(...b[1].map(recTimestamp));
+    return tb - ta;
+  });
+  weekEntries.forEach(([weekLabel, recs]) => {
+    recs.sort((x, y) => recTimestamp(x) - recTimestamp(y));
     const totalDist = recs.reduce((s,r) => s + r.dist, 0);
     const totalFare = recs.reduce((s,r) => s + r.fare, 0);
     const trips = recs.length;
@@ -1308,7 +1371,7 @@ function renderWeekReport() {
             <div class="week-total-lbl">總里程</div>
           </div>
           <div class="week-total">
-            <div class="week-total-val" style="color:var(--accent2)">NT$${totalFare.toLocaleString()}</div>
+            <div class="week-total-val" style="color:var(--accent2)">NT$${fmtMoney(totalFare)}</div>
             <div class="week-total-lbl">總費用</div>
           </div>
         </div>
@@ -1322,7 +1385,7 @@ function renderWeekReport() {
           </div>
           <div class="week-row-dist">${r.dist} km</div>
           <div class="week-row-dist">${formatTime(r.duration)}</div>
-          <div class="week-row-fare">NT$${r.fare.toLocaleString()}</div>
+          <div class="week-row-fare">NT$${fmtMoney(r.fare)}</div>
         </div>`).join('')}
       </div>
     </div>`;
@@ -1340,7 +1403,7 @@ function renderWeekReport() {
           <div class="month-stat-lbl">公里</div>
         </div>
         <div class="month-stat">
-          <div class="month-val" style="color:var(--accent2)">NT$${grandFare.toLocaleString()}</div>
+          <div class="month-val" style="color:var(--accent2)">NT$${fmtMoney(grandFare)}</div>
           <div class="month-stat-lbl">費用</div>
         </div>
       </div>
@@ -1393,10 +1456,10 @@ function copyWeekReport() {
     recs.forEach(r => {
       text += `  ${r.date} ${r.time}  ${r.dist}km  NT$${r.fare}${r.note?' ('+r.note+')':''}\n`;
     });
-    text += `  小計：${dist.toFixed(1)}km  NT$${fare.toLocaleString()}\n`;
+    text += `  小計：${dist.toFixed(1)}km  NT$${fmtMoney(fare)}\n`;
   });
   const grand = records.reduce((s,r)=>s+r.fare,0);
-  text += `\n${'='.repeat(30)}\n總計：NT$${grand.toLocaleString()}`;
+  text += `\n${'='.repeat(30)}\n總計：NT$${fmtMoney(grand)}`;
   navigator.clipboard.writeText(text).then(() => {
     alert('已複製！可貼到 LINE 或 Email 送出');
   });
